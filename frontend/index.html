@@ -1,0 +1,1016 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Haven — Find your quiet place to stay</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          paper: '#F6F3EC',
+          paper2: '#EFEAE0',
+          ink: '#1C2620',
+          ink2: '#3A473E',
+          moss: '#3E5C46',
+          moss2: '#2C4232',
+          gold: '#B98A3D',
+          gold2: '#9C7530',
+          line: '#DCD5C6',
+        },
+        fontFamily: {
+          serif: ['Fraunces', 'serif'],
+          sans: ['Inter', 'sans-serif'],
+        },
+        boxShadow: {
+          soft: '0 1px 2px rgba(28,38,32,0.04), 0 8px 24px -8px rgba(28,38,32,0.10)',
+          softer: '0 1px 1px rgba(28,38,32,0.03), 0 2px 8px rgba(28,38,32,0.06)',
+        },
+        borderRadius: {
+          xl2: '1.25rem',
+        }
+      }
+    }
+  }
+</script>
+<style>
+  html { scroll-behavior: smooth; }
+  body { font-family: 'Inter', sans-serif; background: #F6F3EC; color: #1C2620; }
+  .font-display { font-family: 'Fraunces', serif; }
+  .view { display: none; }
+  .view.active { display: block; }
+  .glass {
+    background: rgba(255,255,255,0.62);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid rgba(255,255,255,0.5);
+  }
+  ::selection { background: #B98A3D; color: #fff; }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  input[type="range"] {
+    -webkit-appearance: none; appearance: none;
+    height: 4px; border-radius: 999px; background: #DCD5C6; outline: none;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 16px; height: 16px; border-radius: 999px; background: #3E5C46;
+    border: 3px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.25); cursor: pointer;
+  }
+  @keyframes riseIn { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+  .rise-in { animation: riseIn 0.7s cubic-bezier(.2,.7,.2,1) both; }
+  .map-texture {
+    background-image:
+      radial-gradient(circle at 20% 30%, rgba(62,92,70,0.10) 0, transparent 40%),
+      radial-gradient(circle at 80% 20%, rgba(185,138,61,0.12) 0, transparent 40%),
+      radial-gradient(circle at 60% 75%, rgba(62,92,70,0.08) 0, transparent 45%),
+      linear-gradient(0deg, transparent 24%, rgba(28,38,32,0.045) 25%, rgba(28,38,32,0.045) 26%, transparent 27%, transparent 74%, rgba(28,38,32,0.045) 75%, rgba(28,38,32,0.045) 76%, transparent 77%),
+      linear-gradient(90deg, transparent 24%, rgba(28,38,32,0.045) 25%, rgba(28,38,32,0.045) 26%, transparent 27%, transparent 74%, rgba(28,38,32,0.045) 75%, rgba(28,38,32,0.045) 76%, transparent 77%);
+    background-size: auto, auto, auto, 60px 60px, 60px 60px;
+    background-color: #E8E2D4;
+  }
+  .focus-ring:focus-visible { outline: 2px solid #3E5C46; outline-offset: 2px; }
+</style>
+</head>
+<body class="antialiased">
+
+<!-- ============ NAV ============ -->
+<header class="sticky top-0 z-40 border-b border-line/70 glass">
+  <div class="max-w-7xl mx-auto px-5 sm:px-8 h-16 flex items-center justify-between">
+    <button onclick="goTo('home')" class="flex items-center gap-2 focus-ring rounded">
+      <svg width="26" height="26" viewBox="0 0 26 26" fill="none"><path d="M13 2L2 10.5V24H10V16H16V24H24V10.5L13 2Z" fill="#3E5C46"/></svg>
+      <span class="font-display text-xl tracking-tight text-ink">Haven</span>
+    </button>
+    <nav class="hidden md:flex items-center gap-8 text-sm text-ink2">
+      <button onclick="goTo('home')" class="nav-link hover:text-ink transition-colors">Home</button>
+      <button onclick="goTo('search')" class="nav-link hover:text-ink transition-colors">Explore stays</button>
+      <button onclick="goTo('detail')" class="nav-link hover:text-ink transition-colors">Room detail</button>
+      <button onclick="goTo('booking')" class="nav-link hover:text-ink transition-colors">Book & pay</button>
+    </nav>
+    <div class="flex items-center gap-3">
+      <button class="hidden sm:inline-flex text-sm font-medium text-ink2 hover:text-ink px-3 py-2 transition-colors focus-ring rounded">List your room</button>
+      <button class="inline-flex items-center gap-2 bg-ink text-paper text-sm font-medium px-4 py-2.5 rounded-full hover:bg-moss2 transition-colors focus-ring">
+        <span class="w-6 h-6 rounded-full bg-gold text-ink text-xs font-semibold flex items-center justify-center">A</span>
+        <span class="hidden sm:inline">Account</span>
+      </button>
+      <button onclick="toggleMobileNav()" id="mobileNavBtn" aria-label="Open menu" aria-expanded="false" class="md:hidden w-10 h-10 rounded-full border border-line flex items-center justify-center shrink-0 focus-ring">
+        <svg id="mobileNavIconOpen" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1C2620" stroke-width="2" stroke-linecap="round"><path d="M3 6h18"/><path d="M3 12h18"/><path d="M3 18h18"/></svg>
+        <svg id="mobileNavIconClose" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1C2620" stroke-width="2" stroke-linecap="round" class="hidden"><path d="M6 6l12 12"/><path d="M18 6L6 18"/></svg>
+      </button>
+    </div>
+  </div>
+  <!-- MOBILE NAV PANEL -->
+  <nav id="mobileNavPanel" class="md:hidden hidden border-t border-line bg-white/95 backdrop-blur">
+    <div class="max-w-7xl mx-auto px-5 py-3 flex flex-col">
+      <button onclick="goTo('home'); closeMobileNav();" class="text-left py-3 text-sm font-medium text-ink border-b border-line/70">Home</button>
+      <button onclick="goTo('search'); closeMobileNav();" class="text-left py-3 text-sm font-medium text-ink border-b border-line/70">Explore stays</button>
+      <button onclick="goTo('detail'); closeMobileNav();" class="text-left py-3 text-sm font-medium text-ink border-b border-line/70">Room detail</button>
+      <button onclick="goTo('booking'); closeMobileNav();" class="text-left py-3 text-sm font-medium text-ink border-b border-line/70">Book & pay</button>
+      <button onclick="closeMobileNav();" class="text-left py-3 text-sm font-medium text-ink2">List your room</button>
+    </div>
+  </nav>
+</header>
+
+<!-- ============================================================ -->
+<!-- ============ PAGE 1: HOME ============ -->
+<!-- ============================================================ -->
+<main id="view-home" class="view active">
+
+  <!-- HERO -->
+  <section class="relative overflow-hidden">
+    <div class="max-w-7xl mx-auto px-5 sm:px-8 pt-14 pb-28 grid lg:grid-cols-12 gap-10 items-center">
+      <div class="lg:col-span-6 rise-in">
+        <p class="text-sm font-medium text-gold2 mb-4">Over 12,400 rooms across 68 cities</p>
+        <h1 class="font-display text-[2.6rem] sm:text-6xl leading-[1.05] text-ink tracking-tight">
+          A quieter way<br> to find your <span class="italic font-normal text-moss">next room.</span>
+        </h1>
+        <p class="mt-6 text-ink2 text-lg max-w-md leading-relaxed">
+          Verified hosts, honest photos, and prices with nothing hidden at checkout. Search, compare, and book in minutes.
+        </p>
+        <div class="mt-8 flex items-center gap-6 text-sm text-ink2">
+          <div><span class="font-display text-2xl text-ink">4.87</span> average rating</div>
+          <div class="w-px h-8 bg-line"></div>
+          <div><span class="font-display text-2xl text-ink">30 min</span> avg. response</div>
+        </div>
+      </div>
+      <div class="lg:col-span-6 relative rise-in" style="animation-delay:.1s">
+        <div class="rounded-xl2 overflow-hidden shadow-soft aspect-[4/3]">
+          <img src="https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?q=80&w=1200&auto=format&fit=crop" class="w-full h-full object-cover" alt="Sunlit minimalist room with a bed near a window">
+        </div>
+        <div class="absolute -bottom-6 -left-6 hidden sm:block glass rounded-xl p-4 shadow-soft w-52">
+          <div class="flex items-center gap-1 text-gold2 text-sm">★★★★★</div>
+          <p class="text-xs text-ink2 mt-1">"Exactly like the photos. Quiet street, great light."</p>
+          <p class="text-xs text-ink mt-1 font-medium">— Priya, booked in Lahore</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- SEARCH BAR -->
+    <div class="max-w-6xl mx-auto px-5 sm:px-8 -mt-16 relative z-10">
+      <div class="glass rounded-2xl shadow-soft p-3 sm:p-3">
+        <div class="grid sm:grid-cols-[1.3fr_1fr_1fr_1fr_auto] divide-y sm:divide-y-0 sm:divide-x divide-line">
+          <div class="p-3 sm:p-4">
+            <label class="block text-xs font-medium text-ink2 mb-1">Location</label>
+            <div class="relative">
+              <input id="locInput" list="cityList" type="text" placeholder="City or neighborhood"
+                class="w-full bg-transparent text-sm font-medium text-ink placeholder:text-ink2/60 focus:outline-none">
+              <datalist id="cityList">
+                <option value="Lahore"></option><option value="Karachi"></option>
+                <option value="Islamabad"></option><option value="Dubai"></option>
+                <option value="Istanbul"></option><option value="Kuala Lumpur"></option>
+              </datalist>
+            </div>
+          </div>
+          <div class="p-3 sm:p-4">
+            <label class="block text-xs font-medium text-ink2 mb-1">Check-in</label>
+            <input type="date" class="w-full bg-transparent text-sm font-medium text-ink focus:outline-none">
+          </div>
+          <div class="p-3 sm:p-4">
+            <label class="block text-xs font-medium text-ink2 mb-1">Check-out</label>
+            <input type="date" class="w-full bg-transparent text-sm font-medium text-ink focus:outline-none">
+          </div>
+          <div class="p-3 sm:p-4 relative">
+            <label class="block text-xs font-medium text-ink2 mb-1">Guests</label>
+            <button onclick="toggleGuests()" class="w-full text-left text-sm font-medium text-ink focus:outline-none" id="guestLabel">2 guests</button>
+            <div id="guestPanel" class="hidden absolute top-full left-0 mt-2 w-64 bg-white rounded-xl shadow-soft border border-line p-4 z-20">
+              <div class="flex items-center justify-between py-2">
+                <div><p class="text-sm font-medium text-ink">Adults</p><p class="text-xs text-ink2">Age 13+</p></div>
+                <div class="flex items-center gap-3">
+                  <button onclick="stepGuest(-1,'adult')" class="w-7 h-7 rounded-full border border-line flex items-center justify-center hover:border-moss">−</button>
+                  <span id="adultCount" class="w-4 text-center text-sm">2</span>
+                  <button onclick="stepGuest(1,'adult')" class="w-7 h-7 rounded-full border border-line flex items-center justify-center hover:border-moss">+</button>
+                </div>
+              </div>
+              <div class="flex items-center justify-between py-2 border-t border-line">
+                <div><p class="text-sm font-medium text-ink">Children</p><p class="text-xs text-ink2">Age 2–12</p></div>
+                <div class="flex items-center gap-3">
+                  <button onclick="stepGuest(-1,'child')" class="w-7 h-7 rounded-full border border-line flex items-center justify-center hover:border-moss">−</button>
+                  <span id="childCount" class="w-4 text-center text-sm">0</span>
+                  <button onclick="stepGuest(1,'child')" class="w-7 h-7 rounded-full border border-line flex items-center justify-center hover:border-moss">+</button>
+                </div>
+              </div>
+              <button onclick="toggleGuests()" class="mt-2 w-full text-center text-xs font-medium text-moss py-2">Done</button>
+            </div>
+          </div>
+          <div class="p-2 sm:p-2 flex items-center">
+            <button onclick="goTo('search')" class="w-full sm:w-auto flex items-center justify-center gap-2 bg-moss hover:bg-moss2 text-white font-medium text-sm px-6 py-3.5 rounded-xl transition-colors focus-ring">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+              Search
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FEATURED DESTINATIONS -->
+  <section class="max-w-7xl mx-auto px-5 sm:px-8 pt-24 pb-4">
+    <div class="flex items-end justify-between mb-8">
+      <div>
+        <h2 class="font-display text-3xl text-ink">Featured destinations</h2>
+        <p class="text-ink2 mt-1">Cities where Haven guests stay most.</p>
+      </div>
+    </div>
+    <div id="destinationsGrid" class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div class="col-span-2 md:col-span-4 text-sm text-ink2">Loading destinations…</div>
+    </div>
+  </section>
+
+  <!-- POPULAR LISTINGS -->
+  <section class="max-w-7xl mx-auto px-5 sm:px-8 py-20">
+    <div class="flex items-end justify-between mb-8">
+      <div>
+        <h2 class="font-display text-3xl text-ink">Popular this week</h2>
+        <p class="text-ink2 mt-1">Highly rated rooms, booked often.</p>
+      </div>
+      <button onclick="goTo('search')" class="hidden sm:inline text-sm font-medium text-moss hover:text-moss2">View all stays →</button>
+    </div>
+    <div id="popularGrid" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="border-t border-line mt-8">
+    <div class="max-w-7xl mx-auto px-5 sm:px-8 py-12 grid sm:grid-cols-3 gap-8 text-sm text-ink2">
+      <div>
+        <div class="flex items-center gap-2 mb-3">
+          <svg width="22" height="22" viewBox="0 0 26 26" fill="none"><path d="M13 2L2 10.5V24H10V16H16V24H24V10.5L13 2Z" fill="#3E5C46"/></svg>
+          <span class="font-display text-lg text-ink">Haven</span>
+        </div>
+        <p class="max-w-xs">A calmer way to book rooms, studios, and suites — with honest pricing, always.</p>
+      </div>
+      <div>
+        <p class="font-medium text-ink mb-2">Company</p>
+        <ul class="space-y-1"><li>About</li><li>Careers</li><li>Trust & safety</li></ul>
+      </div>
+      <div>
+        <p class="font-medium text-ink mb-2">Hosting</p>
+        <ul class="space-y-1"><li>List your room</li><li>Host resources</li><li>Community</li></ul>
+      </div>
+    </div>
+    <div class="text-center text-xs text-ink2/70 pb-8">© 2026 Haven Stays, Inc.</div>
+  </footer>
+</main>
+
+<!-- ============================================================ -->
+<!-- ============ PAGE 2: SEARCH & LISTINGS ============ -->
+<!-- ============================================================ -->
+<main id="view-search" class="view">
+  <div class="border-b border-line bg-white/60">
+    <div class="max-w-7xl mx-auto px-5 sm:px-8 py-4">
+      <div class="glass rounded-xl shadow-softer p-2 flex flex-wrap items-center gap-2 text-sm">
+        <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/70 border border-line">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#3E5C46" stroke-width="2"><path d="M12 21s-7-6.1-7-11a7 7 0 1 1 14 0c0 4.9-7 11-7 11Z"/><circle cx="12" cy="10" r="2.5"/></svg>
+          <span id="searchCityLabel" class="font-medium text-ink">Lahore, Pakistan</span>
+        </div>
+        <span class="px-3 py-1.5 rounded-lg bg-white/70 border border-line text-ink2">Sep 12 – Sep 16</span>
+        <span class="px-3 py-1.5 rounded-lg bg-white/70 border border-line text-ink2">2 guests</span>
+        <button onclick="goTo('home')" class="ml-auto px-4 py-1.5 rounded-lg bg-ink text-white font-medium hover:bg-moss2">Edit search</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="max-w-7xl mx-auto px-5 sm:px-8 py-8 grid lg:grid-cols-[1fr_1fr] gap-8">
+    <!-- LEFT: filters + listings -->
+    <div>
+      <!-- FILTER BAR -->
+      <div class="bg-white rounded-xl2 border border-line p-5 mb-6 shadow-softer">
+        <div class="grid sm:grid-cols-2 gap-6">
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <label class="text-sm font-medium text-ink">Price per night</label>
+              <span id="priceOut" class="text-sm text-moss font-medium">Rs 3,000 – 25,000</span>
+            </div>
+            <input type="range" min="1000" max="25000" value="25000" step="500" id="priceSlider" class="w-full" oninput="updatePrice(this.value); runSearch()">
+          </div>
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <label class="text-sm font-medium text-ink">Distance from center</label>
+              <span id="distOut" class="text-sm text-moss font-medium">6 km</span>
+            </div>
+            <input type="range" min="1" max="20" value="6" id="distSlider" class="w-full" oninput="document.getElementById('distOut').textContent = this.value + ' km'">
+          </div>
+        </div>
+        <div class="mt-6">
+          <p class="text-sm font-medium text-ink mb-3">Room type</p>
+          <div id="roomTypeChips" class="flex flex-wrap gap-2">
+            <button class="roomtype-chip active px-4 py-2 rounded-full border text-sm font-medium transition-colors" data-chip data-value="">Any</button>
+            <button class="roomtype-chip px-4 py-2 rounded-full border text-sm font-medium transition-colors" data-chip data-value="Single">Single</button>
+            <button class="roomtype-chip px-4 py-2 rounded-full border text-sm font-medium transition-colors" data-chip data-value="Studio">Studio</button>
+            <button class="roomtype-chip px-4 py-2 rounded-full border text-sm font-medium transition-colors" data-chip data-value="Luxury Suite">Luxury Suite</button>
+          </div>
+        </div>
+        <div class="mt-6">
+          <p class="text-sm font-medium text-ink mb-3">Amenities</p>
+          <div id="amenityChecks" class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm text-ink2">
+            <label class="flex items-center gap-2"><input type="checkbox" value="Wi-Fi" onchange="runSearch()" class="accent-moss w-4 h-4"> Wi-Fi</label>
+            <label class="flex items-center gap-2"><input type="checkbox" value="AC" onchange="runSearch()" class="accent-moss w-4 h-4"> AC</label>
+            <label class="flex items-center gap-2"><input type="checkbox" value="Parking" onchange="runSearch()" class="accent-moss w-4 h-4"> Parking</label>
+            <label class="flex items-center gap-2"><input type="checkbox" value="Kitchen" onchange="runSearch()" class="accent-moss w-4 h-4"> Kitchen</label>
+          </div>
+        </div>
+      </div>
+
+      <p class="text-sm text-ink2 mb-4"><span id="resultsCount" class="font-medium text-ink">–</span> rooms found <span id="resultsCityLabel"></span></p>
+      <div id="searchGrid" class="grid sm:grid-cols-2 gap-5"></div>
+    </div>
+
+    <!-- RIGHT: map panel -->
+    <div id="searchMapPanel" class="hidden lg:block sticky top-24 h-[calc(100vh-7rem)] rounded-xl2 overflow-hidden border border-line map-texture relative shadow-softer">
+      <div class="absolute top-4 left-4 bg-white rounded-lg shadow-softer px-3 py-2 text-xs font-medium text-ink2 z-[500]">Map view · <span id="searchMapCity">Lahore</span></div>
+      <div id="mapPins" class="absolute inset-0"></div>
+    </div>
+  </div>
+</main>
+
+<!-- ============================================================ -->
+<!-- ============ PAGE 3: ROOM DETAIL ============ -->
+<!-- ============================================================ -->
+<main id="view-detail" class="view">
+  <div class="max-w-7xl mx-auto px-5 sm:px-8 pt-8">
+    <button onclick="goTo('search')" class="text-sm text-ink2 hover:text-ink flex items-center gap-1 mb-4">← Back to search</button>
+
+    <!-- GALLERY -->
+    <div id="dGallery" class="grid grid-cols-4 grid-rows-2 gap-2 rounded-xl2 overflow-hidden h-[420px]">
+      <div class="col-span-2 row-span-2 cursor-pointer group overflow-hidden" onclick="openLightbox(0)">
+        <img id="dImgMain" src="" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" alt="Room photo">
+      </div>
+      <div class="cursor-pointer overflow-hidden group" onclick="openLightbox(1)"><img id="dImg1" src="" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" alt="Room photo"></div>
+      <div class="cursor-pointer overflow-hidden group" onclick="openLightbox(2)"><img id="dImg2" src="" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" alt="Room photo"></div>
+      <div class="cursor-pointer overflow-hidden group" onclick="openLightbox(3)"><img id="dImg3" src="" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" alt="Room photo"></div>
+      <div class="relative cursor-pointer overflow-hidden group" onclick="openLightbox(4)">
+        <img id="dImg4" src="" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" alt="Room photo">
+        <div id="dMorePhotos" class="absolute inset-0 bg-ink/50 flex items-center justify-center text-white text-sm font-medium">+8 photos</div>
+      </div>
+    </div>
+
+    <div class="grid lg:grid-cols-[1.6fr_1fr] gap-12 mt-10 pb-24">
+      <!-- LEFT: details -->
+      <div>
+        <div class="flex items-start justify-between">
+          <div>
+            <p id="dRoomType" class="text-xs font-medium text-moss uppercase tracking-wide">Luxury Suite</p>
+            <h1 id="dTitle" class="font-display text-3xl text-ink mt-1">Garden-View Suite near Liberty Market</h1>
+            <p class="text-ink2 mt-2 flex items-center gap-1 text-sm">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s-7-6.1-7-11a7 7 0 1 1 14 0c0 4.9-7 11-7 11Z"/><circle cx="12" cy="10" r="2.5"/></svg>
+              <span id="dAddress">Gulberg III, Lahore</span>&nbsp;·&nbsp;★ <span id="dRating">4.92</span> (<span id="dReviewCount">218</span> reviews)
+            </p>
+          </div>
+          <button onclick="toggleFav(this, currentListing && currentListing.id)" class="fav-btn w-10 h-10 rounded-full border border-line flex items-center justify-center hover:border-gold shrink-0">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3A473E" stroke-width="2"><path d="M12 21s-8-4.5-8-11a5 5 0 0 1 8-4 5 5 0 0 1 8 4c0 6.5-8 11-8 11Z"/></svg>
+          </button>
+        </div>
+
+        <div class="flex items-center gap-6 py-6 my-6 border-y border-line text-sm text-ink2">
+          <div><p id="dMaxGuests" class="font-medium text-ink">4 guests</p><p>max capacity</p></div>
+          <div class="w-px h-8 bg-line"></div>
+          <div><p id="dBedrooms" class="font-medium text-ink">2 bedrooms</p><p>sleeping space</p></div>
+          <div class="w-px h-8 bg-line"></div>
+          <div><p id="dBathrooms" class="font-medium text-ink">1 bathroom</p><p>ensuite</p></div>
+        </div>
+
+        <!-- HOST CARD -->
+        <div class="flex items-center gap-4 p-4 rounded-xl2 border border-line bg-white mb-8">
+          <!-- <img src="https://images.unsplash.com/photo-1607346256330-dee7af15f7c5?q=80&w=200&auto=format&fit=crop" class="w-14 h-14 rounded-full object-cover" alt="Host portrait"> -->
+          <div class="flex-1">
+            <p id="dHostName" class="font-medium text-ink">Hosted by Mudasir</p>
+            <p class="text-sm text-ink2">Superhost · Responds within an hour</p>
+          </div>
+          <button class="text-sm font-medium text-moss hover:text-moss2">Message</button>
+        </div>
+
+        <p id="dDescription" class="text-ink2 leading-relaxed">
+          A calm, light-filled suite tucked behind a private garden entrance, five minutes' walk from Liberty Market.
+        </p>
+
+        <!-- AMENITIES -->
+        <div class="mt-10">
+          <h3 class="font-display text-xl text-ink mb-4">What this place offers</h3>
+          <div id="dAmenities" class="grid grid-cols-2 gap-y-3 text-sm text-ink2">
+          </div>
+        </div>
+
+        <!-- LOCATION MAP -->
+        <div class="mt-10">
+          <h3 class="font-display text-xl text-ink mb-4">Where you'll be</h3>
+          <div id="dMap" class="rounded-xl2 overflow-hidden border border-line h-64 map-texture relative">
+            <div class="absolute inset-0 flex items-center justify-center">
+              <div class="w-4 h-4 rounded-full bg-moss ring-8 ring-moss/20"></div>
+            </div>
+            <div class="absolute bottom-3 left-3 bg-white rounded-lg px-3 py-1.5 text-xs font-medium text-ink2 shadow-softer z-[500]" id="dMapLabel">Gulberg III, Lahore</div>
+          </div>
+        </div>
+
+        <!-- HOUSE RULES -->
+        <div class="mt-10">
+          <h3 class="font-display text-xl text-ink mb-4">House rules</h3>
+          <ul id="dRules" class="text-sm text-ink2 space-y-2 leading-relaxed">
+            <li>Check-in after 2:00 PM · Check-out before 11:00 AM</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- RIGHT: sticky booking card -->
+      <div class="relative">
+        <div class="sticky top-24 bg-white rounded-xl2 border border-line shadow-soft p-6">
+          <div class="flex items-baseline justify-between">
+            <p><span id="dNightlyRate" class="font-display text-2xl text-ink">Rs 12,500</span> <span class="text-ink2 text-sm">/ night</span></p>
+            <span class="text-sm text-ink2">★ <span id="dRatingCard">4.92</span></span>
+          </div>
+          <div class="mt-5 border border-line rounded-xl overflow-hidden">
+            <div class="grid grid-cols-2 divide-x divide-line">
+              <div class="p-3">
+                <label class="block text-[11px] font-medium text-ink2 uppercase tracking-wide">Check-in</label>
+                <input type="date" id="dCheckin" value="2026-09-12" oninput="calcPrice()" class="w-full text-sm font-medium text-ink bg-transparent focus:outline-none mt-0.5">
+              </div>
+              <div class="p-3">
+                <label class="block text-[11px] font-medium text-ink2 uppercase tracking-wide">Check-out</label>
+                <input type="date" id="dCheckout" value="2026-09-16" oninput="calcPrice()" class="w-full text-sm font-medium text-ink bg-transparent focus:outline-none mt-0.5">
+              </div>
+            </div>
+            <div class="p-3 border-t border-line">
+              <label class="block text-[11px] font-medium text-ink2 uppercase tracking-wide">Guests</label>
+              <select id="dGuests" class="w-full text-sm font-medium text-ink bg-transparent focus:outline-none mt-0.5">
+                <option>1 guest</option><option selected>2 guests</option><option>3 guests</option><option>4 guests</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="mt-5 space-y-2 text-sm">
+            <div class="flex justify-between text-ink2"><span id="nightsLabel">Rs 12,500 × 4 nights</span><span id="nightsTotal">Rs 50,000</span></div>
+            <div class="flex justify-between text-ink2"><span>Cleaning fee</span><span id="cleaningFeeOut">Rs 2,500</span></div>
+            <div class="flex justify-between text-ink2"><span>Service fee</span><span id="serviceFee">Rs 3,150</span></div>
+            <div class="flex justify-between font-medium text-ink pt-3 border-t border-line"><span>Total</span><span id="grandTotal">Rs 55,650</span></div>
+          </div>
+          <p id="quoteError" class="text-xs text-red-600 mt-2 hidden"></p>
+
+          <button onclick="goTo('booking')" class="mt-6 w-full bg-moss hover:bg-moss2 text-white font-medium py-3.5 rounded-xl transition-colors focus-ring">Proceed to book</button>
+          <p class="text-center text-xs text-ink2 mt-3">You won't be charged yet</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<!-- ============================================================ -->
+<!-- ============ PAGE 4: BOOKING & PAYMENT ============ -->
+<!-- ============================================================ -->
+<main id="view-booking" class="view">
+  <div class="max-w-6xl mx-auto px-5 sm:px-8 py-10 pb-24">
+
+    <!-- STEPPER -->
+    <div class="flex items-center justify-center gap-3 mb-12" id="stepperBar">
+      <div class="step-item flex items-center gap-2" data-step="1">
+        <div class="step-dot w-8 h-8 rounded-full bg-moss text-white flex items-center justify-center text-sm font-medium">1</div>
+        <span class="text-sm font-medium text-ink">Guest info</span>
+      </div>
+      <div class="w-10 h-px bg-line"></div>
+      <div class="step-item flex items-center gap-2" data-step="2">
+        <div class="step-dot w-8 h-8 rounded-full bg-paper2 border border-line text-ink2 flex items-center justify-center text-sm font-medium">2</div>
+        <span class="text-sm font-medium text-ink2">Payment</span>
+      </div>
+      <div class="w-10 h-px bg-line"></div>
+      <div class="step-item flex items-center gap-2" data-step="3">
+        <div class="step-dot w-8 h-8 rounded-full bg-paper2 border border-line text-ink2 flex items-center justify-center text-sm font-medium">3</div>
+        <span class="text-sm font-medium text-ink2">Confirmation</span>
+      </div>
+    </div>
+
+    <div class="grid lg:grid-cols-[1.5fr_1fr] gap-10">
+      <div>
+        <!-- STEP 1 -->
+        <div id="bookStep1" class="book-step">
+          <h2 class="font-display text-2xl text-ink mb-1">Who's checking in?</h2>
+          <p class="text-ink2 text-sm mb-6">We'll use this to confirm your reservation.</p>
+          <div class="bg-white border border-line rounded-xl2 p-6 grid sm:grid-cols-2 gap-5">
+            <div><label class="block text-sm font-medium text-ink mb-1.5">First name</label><input id="gFirstName" type="text" placeholder="Ayesha" class="w-full border border-line rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-moss"></div>
+            <div><label class="block text-sm font-medium text-ink mb-1.5">Last name</label><input id="gLastName" type="text" placeholder="Khan" class="w-full border border-line rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-moss"></div>
+            <div><label class="block text-sm font-medium text-ink mb-1.5">Email</label><input id="gEmail" type="email" placeholder="ayesha@email.com" class="w-full border border-line rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-moss"></div>
+            <div><label class="block text-sm font-medium text-ink mb-1.5">Phone</label><input id="gPhone" type="tel" placeholder="+92 300 1234567" class="w-full border border-line rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-moss"></div>
+            <div class="sm:col-span-2"><label class="block text-sm font-medium text-ink mb-1.5">Special requests <span class="text-ink2 font-normal">(optional)</span></label><textarea id="gRequests" rows="3" placeholder="Late check-in, extra towels, etc." class="w-full border border-line rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-moss resize-none"></textarea></div>
+          </div>
+          <p id="guestInfoError" class="text-xs text-red-600 mt-2 hidden"></p>
+          <button onclick="submitGuestInfo()" class="mt-6 w-full sm:w-auto bg-moss hover:bg-moss2 text-white font-medium px-8 py-3.5 rounded-xl transition-colors focus-ring">Continue to payment</button>
+        </div>
+
+        <!-- STEP 2 -->
+        <div id="bookStep2" class="book-step hidden">
+          <h2 class="font-display text-2xl text-ink mb-1">Choose how to pay</h2>
+          <p class="text-ink2 text-sm mb-6">All payments are encrypted and secure.</p>
+          <div class="space-y-3">
+            <label class="pay-option flex items-center gap-4 border border-line rounded-xl p-4 cursor-pointer has-[:checked]:border-moss has-[:checked]:bg-moss/5">
+              <input type="radio" name="pay" value="card" checked class="accent-moss w-4 h-4">
+              <div class="flex-1"><p class="font-medium text-ink text-sm">Credit / Debit card</p><p class="text-xs text-ink2">Visa, Mastercard, UnionPay</p></div>
+              <span class="text-xs text-ink2">•••• 4821</span>
+            </label>
+            <label class="pay-option flex items-center gap-4 border border-line rounded-xl p-4 cursor-pointer has-[:checked]:border-moss has-[:checked]:bg-moss/5">
+              <input type="radio" name="pay" value="wallet" class="accent-moss w-4 h-4">
+              <div class="flex-1"><p class="font-medium text-ink text-sm">Mobile wallet</p><p class="text-xs text-ink2">JazzCash, Easypaisa</p></div>
+            </label>
+            <label class="pay-option flex items-center gap-4 border border-line rounded-xl p-4 cursor-pointer has-[:checked]:border-moss has-[:checked]:bg-moss/5">
+              <input type="radio" name="pay" value="bank_transfer" class="accent-moss w-4 h-4">
+              <div class="flex-1"><p class="font-medium text-ink text-sm">Bank transfer</p><p class="text-xs text-ink2">Confirmed within 24 hours</p></div>
+            </label>
+          </div>
+          <div class="bg-white border border-line rounded-xl2 p-6 mt-5 grid sm:grid-cols-2 gap-5">
+            <div class="sm:col-span-2"><label class="block text-sm font-medium text-ink mb-1.5">Card number</label><input type="text" placeholder="4242 4242 4242 4242" class="w-full border border-line rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-moss"></div>
+            <div><label class="block text-sm font-medium text-ink mb-1.5">Expiry</label><input type="text" placeholder="MM / YY" class="w-full border border-line rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-moss"></div>
+            <div><label class="block text-sm font-medium text-ink mb-1.5">CVC</label><input type="text" placeholder="123" class="w-full border border-line rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-moss"></div>
+          </div>
+          <p id="paymentError" class="text-xs text-red-600 mt-2 hidden"></p>
+          <div class="mt-6 flex gap-3">
+            <button onclick="bookStep(1)" class="text-ink2 hover:text-ink font-medium px-6 py-3.5 text-sm">Back</button>
+            <button id="confirmPayBtn" onclick="confirmBooking()" class="flex-1 sm:flex-none bg-moss hover:bg-moss2 text-white font-medium px-8 py-3.5 rounded-xl transition-colors focus-ring">Confirm and pay <span id="confirmPayTotal">Rs 55,650</span></button>
+          </div>
+        </div>
+
+        <!-- STEP 3 -->
+        <div id="bookStep3" class="book-step hidden text-center py-6">
+          <div class="w-16 h-16 rounded-full bg-moss/10 flex items-center justify-center mx-auto mb-6">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#3E5C46" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
+          </div>
+          <h2 class="font-display text-3xl text-ink">Booking confirmed</h2>
+          <p class="text-ink2 mt-2">A confirmation has been sent to your email.</p>
+          <div class="max-w-md mx-auto mt-8 bg-white border border-line rounded-xl2 overflow-hidden text-left shadow-softer">
+            <div class="p-5 flex items-center gap-4 border-b border-line">
+              <img id="confImg" src="https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?q=80&w=200&auto=format&fit=crop" class="w-16 h-16 rounded-lg object-cover" alt="Booked room thumbnail">
+              <div>
+                <p id="confTitle" class="font-medium text-ink text-sm">Garden-View Suite</p>
+                <p id="confAddress" class="text-xs text-ink2">Gulberg III, Lahore</p>
+              </div>
+            </div>
+            <div class="p-5 space-y-2 text-sm">
+              <div class="flex justify-between"><span class="text-ink2">Booking ID</span><span class="font-medium text-ink" id="bookingId">HVN-284719</span></div>
+              <div class="flex justify-between"><span class="text-ink2">Dates</span><span class="font-medium text-ink" id="confDates">Sep 12 – Sep 16, 2026</span></div>
+              <div class="flex justify-between"><span class="text-ink2">Guests</span><span class="font-medium text-ink" id="confGuests">2 guests</span></div>
+              <div class="flex justify-between pt-2 border-t border-line"><span class="text-ink2">Total paid</span><span class="font-medium text-ink" id="confTotal">Rs 55,650</span></div>
+            </div>
+            <div class="h-32 map-texture relative border-t border-line">
+              <div class="absolute inset-0 flex items-center justify-center">
+                <div class="w-3.5 h-3.5 rounded-full bg-gold ring-8 ring-gold/20"></div>
+              </div>
+            </div>
+          </div>
+          <button onclick="goTo('home')" class="mt-8 bg-ink hover:bg-moss2 text-white font-medium px-8 py-3.5 rounded-xl transition-colors focus-ring">Back to home</button>
+        </div>
+      </div>
+
+      <!-- summary sidebar -->
+      <div class="hidden lg:block">
+        <div class="sticky top-24 bg-white border border-line rounded-xl2 p-6 shadow-softer">
+          <div class="flex gap-3 pb-5 border-b border-line">
+            <img id="sumImg" src="https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?q=80&w=200&auto=format&fit=crop" class="w-16 h-16 rounded-lg object-cover" alt="Room thumbnail">
+            <div>
+              <p id="sumTitle" class="font-medium text-ink text-sm leading-snug">Garden-View Suite near Liberty Market</p>
+              <p id="sumRating" class="text-xs text-ink2 mt-1">★ 4.92 (218 reviews)</p>
+            </div>
+          </div>
+          <div class="py-5 space-y-2 text-sm border-b border-line">
+            <div class="flex justify-between text-ink2"><span id="sumNightsLabel">Rs 12,500 × 4 nights</span><span id="sumNightsTotal">Rs 50,000</span></div>
+            <div class="flex justify-between text-ink2"><span>Cleaning fee</span><span id="sumCleaning">Rs 2,500</span></div>
+            <div class="flex justify-between text-ink2"><span>Service fee</span><span id="sumService">Rs 3,150</span></div>
+          </div>
+          <div class="flex justify-between pt-5 font-medium text-ink"><span>Total</span><span id="sumTotal">Rs 55,650</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<!-- LIGHTBOX -->
+<div id="lightbox" class="fixed inset-0 z-50 bg-ink/90 hidden items-center justify-center p-6">
+  <button onclick="closeLightbox()" class="absolute top-6 right-6 text-white/80 hover:text-white text-sm font-medium">Close ✕</button>
+  <img id="lightboxImg" src="" class="max-h-[85vh] max-w-4xl w-full object-contain rounded-lg" alt="Full screen gallery view">
+</div>
+
+<script>
+  // ---------- MOBILE NAV ----------
+  function toggleMobileNav(){
+    const panel = document.getElementById('mobileNavPanel');
+    const isHidden = panel.classList.contains('hidden');
+    panel.classList.toggle('hidden');
+    document.getElementById('mobileNavIconOpen').classList.toggle('hidden', isHidden);
+    document.getElementById('mobileNavIconClose').classList.toggle('hidden', !isHidden);
+    document.getElementById('mobileNavBtn').setAttribute('aria-expanded', String(isHidden));
+  }
+  function closeMobileNav(){
+    document.getElementById('mobileNavPanel').classList.add('hidden');
+    document.getElementById('mobileNavIconOpen').classList.remove('hidden');
+    document.getElementById('mobileNavIconClose').classList.add('hidden');
+    document.getElementById('mobileNavBtn').setAttribute('aria-expanded', 'false');
+  }
+
+  // ---------- BACKEND CONFIG ----------
+  // Change this if your API runs somewhere other than localhost:4000
+  const API_BASE = 'http://localhost:4000/api';
+  let currentListing = null;   // full listing object currently shown on the detail page
+  let currentListingId = null; // id used when a card is clicked, before detail loads
+  let detailMap = null, searchMap = null;
+  const FALLBACK_IMG = 'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?q=80&w=800&auto=format&fit=crop';
+
+  // Safe DOM helpers — never throw if an element is missing from the page,
+  // just skip that update instead of crashing the whole render.
+  function setText(id, text){ const el = document.getElementById(id); if(el) el.textContent = text; }
+  function setHTML(id, html){ const el = document.getElementById(id); if(el) el.innerHTML = html; }
+  function setSrc(id, src){ const el = document.getElementById(id); if(el) el.src = src; }
+
+
+  async function api(path, options = {}) {
+    const res = await fetch(API_BASE + path, {
+      headers: { 'Content-Type': 'application/json' },
+      ...options,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+    return data;
+  }
+
+  // ---------- NAV ----------
+  function goTo(page, listingId){
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    document.getElementById('view-' + page).classList.add('active');
+    window.scrollTo({top:0, behavior:'instant'});
+    if(listingId) currentListingId = listingId;
+    if(page === 'search') runSearch();
+    if(page === 'detail') loadDetail(currentListingId);
+    if(page === 'booking') { bookStep(1); fillBookingSummary(); }
+  }
+
+  // ---------- GUEST COUNTER ----------
+  let guestState = { adult: 2, child: 0 };
+  function toggleGuests(){ document.getElementById('guestPanel').classList.toggle('hidden'); }
+  function stepGuest(dir, type){
+    guestState[type] = Math.max(type==='adult'?1:0, guestState[type] + dir);
+    document.getElementById(type + 'Count').textContent = guestState[type];
+    const total = guestState.adult + guestState.child;
+    setText('guestLabel', total + (total === 1 ? ' guest' : ' guests'));
+  }
+  document.addEventListener('click', (e) => {
+    const panel = document.getElementById('guestPanel');
+    if(!panel.classList.contains('hidden') && !e.target.closest('#guestPanel') && e.target.id !== 'guestLabel'){
+      panel.classList.add('hidden');
+    }
+  });
+
+  // ---------- IMAGE HELPER ----------
+  // Listing images from the API can be Unsplash *page* IDs or full URLs; this
+  // normalizes either into a working <img src>, and falls back if empty.
+  function resolveImg(src){
+    if(!src) return FALLBACK_IMG;
+    if(src.includes('?')) return src; // already a full query'd URL
+    if(src.startsWith('http')) return src + '?q=80&w=1200&auto=format&fit=crop';
+    return FALLBACK_IMG;
+  }
+
+  // ---------- DESTINATIONS ----------
+  async function loadDestinations(){
+    const grid = document.getElementById('destinationsGrid');
+    try {
+      const { cities } = await api('/cities');
+      if(!cities.length){ grid.innerHTML = '<p class="col-span-4 text-sm text-ink2">No destinations yet.</p>'; return; }
+      grid.innerHTML = cities.slice(0,4).map(c => `
+        <div class="destination-card group relative rounded-xl2 overflow-hidden aspect-[3/4] cursor-pointer" onclick="searchCity('${c.name.replace(/'/g,"\\'")}')">
+          <img src="${resolveImg(c.image_url)}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" alt="${c.name}">
+          <div class="absolute inset-0 bg-gradient-to-t from-ink/70 via-ink/0 to-transparent"></div>
+          <div class="absolute bottom-4 left-4 text-white">
+            <p class="font-display text-xl">${c.name}</p>
+            <p class="text-xs opacity-80">${c.listing_count} stays</p>
+          </div>
+        </div>`).join('');
+    } catch (err) {
+      grid.innerHTML = `<p class="col-span-4 text-sm text-red-600">Couldn't load destinations — is the API running at ${API_BASE}? (${err.message})</p>`;
+    }
+  }
+  function searchCity(name){
+    document.getElementById('locInput').value = name;
+    goTo('search');
+  }
+
+  // ---------- LISTING CARD ----------
+  function cardHTML(l){
+    const img = resolveImg(l.images && l.images[0]);
+    return `
+    <div class="group bg-white rounded-xl2 overflow-hidden border border-line hover:shadow-soft transition-shadow cursor-pointer" onclick="goTo('detail','${l.id}')">
+      <div class="relative aspect-[4/3] overflow-hidden">
+        <img src="${img}" onerror="this.src='${FALLBACK_IMG}'" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" alt="${l.title}">
+        <button onclick="event.stopPropagation(); toggleFav(this,'${l.id}')" class="fav-btn absolute top-3 right-3 w-9 h-9 rounded-full bg-white/85 backdrop-blur flex items-center justify-center hover:scale-110 transition-transform">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="${l.isFavorited?'#B98A3D':'none'}" stroke="${l.isFavorited?'#B98A3D':'#3A473E'}" stroke-width="2"><path d="M12 21s-8-4.5-8-11a5 5 0 0 1 8-4 5 5 0 0 1 8 4c0 6.5-8 11-8 11Z"/></svg>
+        </button>
+        <span class="absolute bottom-3 left-3 bg-white/90 backdrop-blur text-ink text-xs font-medium px-2.5 py-1 rounded-full">${l.roomType}</span>
+      </div>
+      <div class="p-4">
+        <div class="flex items-start justify-between gap-2">
+          <p class="font-medium text-ink text-sm leading-snug">${l.title}</p>
+          <span class="text-xs text-ink2 flex items-center gap-1 shrink-0">★ ${l.rating || '—'}</span>
+        </div>
+        <p class="text-xs text-ink2 mt-1 flex items-center gap-1">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s-7-6.1-7-11a7 7 0 1 1 14 0c0 4.9-7 11-7 11Z"/><circle cx="12" cy="10" r="2.5"/></svg>
+          ${l.address || l.city}
+        </p>
+        <p class="mt-3 text-sm"><span class="font-display text-lg text-ink">Rs ${l.pricePerNight.toLocaleString()}</span> <span class="text-ink2">/ night</span></p>
+      </div>
+    </div>`;
+  }
+
+  // ---------- HOME: POPULAR LISTINGS ----------
+  async function loadPopular(){
+    const grid = document.getElementById('popularGrid');
+    grid.innerHTML = '<p class="text-sm text-ink2">Loading listings…</p>';
+    try {
+      const { listings } = await api('/listings?sort=rating&pageSize=6');
+      grid.innerHTML = listings.length ? listings.map(cardHTML).join('') : '<p class="text-sm text-ink2">No listings yet — run the seed script.</p>';
+    } catch (err) {
+      grid.innerHTML = `<p class="text-sm text-red-600">Couldn't reach the API at ${API_BASE}. Is the backend running (npm start)? (${err.message})</p>`;
+    }
+  }
+
+  // ---------- SEARCH & LISTINGS PAGE ----------
+  async function runSearch(){
+    const grid = document.getElementById('searchGrid');
+    grid.innerHTML = '<p class="text-sm text-ink2">Searching…</p>';
+    const city = document.getElementById('locInput').value.trim();
+    setText('searchCityLabel', city ? city : 'All cities');
+    setText('searchMapCity', city || 'All cities');
+
+    const activeChip = document.querySelector('[data-chip].active');
+    const roomType = activeChip ? activeChip.dataset.value : '';
+    const maxPrice = document.getElementById('priceSlider').value;
+    const amenities = Array.from(document.querySelectorAll('#amenityChecks input:checked')).map(i => i.value).join(',');
+
+    const params = new URLSearchParams();
+    if(city) params.set('city', city);
+    if(roomType) params.set('roomType', roomType);
+    if(maxPrice) params.set('maxPrice', maxPrice);
+    if(amenities) params.set('amenities', amenities);
+    params.set('sort', 'newest');
+    params.set('pageSize', '24');
+
+    try {
+      const data = await api('/listings?' + params.toString());
+      setText('resultsCount', data.total);
+      grid.innerHTML = data.listings.length ? data.listings.map(cardHTML).join('') : '<p class="text-sm text-ink2 col-span-2">No rooms match these filters yet.</p>';
+      renderSearchMap(data.listings);
+    } catch (err) {
+      grid.innerHTML = `<p class="text-sm text-red-600 col-span-2">Couldn't reach the API at ${API_BASE}. Is the backend running? (${err.message})</p>`;
+    }
+  }
+
+  function renderSearchMap(listings){
+    const withCoords = listings.filter(l => l.lat && l.lng);
+    const panel = document.getElementById('searchMapPanel');
+    if(!withCoords.length){
+      // No coordinates seeded yet — keep the styled placeholder with price badges instead.
+      const pins = [ {t:'20%',l:'30%'}, {t:'45%',l:'60%'}, {t:'65%',l:'25%'}, {t:'30%',l:'75%'}, {t:'75%',l:'55%'}, {t:'15%',l:'55%'} ];
+      document.getElementById('mapPins').innerHTML = listings.slice(0,6).map((l,i) => `
+        <div class="absolute -translate-x-1/2 -translate-y-1/2" style="top:${pins[i%pins.length].t}; left:${pins[i%pins.length].l};">
+          <div class="bg-ink text-white text-xs font-medium px-2.5 py-1 rounded-full shadow-softer cursor-pointer hover:bg-moss transition-colors" onclick="goTo('detail','${l.id}')">Rs ${(l.pricePerNight/1000).toFixed(1)}k</div>
+        </div>`).join('');
+      return;
+    }
+    if(!searchMap){
+      panel.innerHTML = '<div id="searchMapEl" class="w-full h-full"></div>';
+      searchMap = L.map('searchMapEl');
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(searchMap);
+      searchMap._markers = [];
+    } else {
+      searchMap._markers.forEach(m => searchMap.removeLayer(m));
+      searchMap._markers = [];
+    }
+    const bounds = [];
+    withCoords.forEach(l => {
+      const marker = L.marker([l.lat, l.lng]).addTo(searchMap)
+        .bindPopup(`<b>${l.title}</b><br>Rs ${l.pricePerNight.toLocaleString()} / night`);
+      marker.on('click', () => goTo('detail', l.id));
+      searchMap._markers.push(marker);
+      bounds.push([l.lat, l.lng]);
+    });
+    searchMap.fitBounds(bounds, { padding: [30,30], maxZoom: 14 });
+    setTimeout(() => searchMap.invalidateSize(), 200);
+  }
+
+  // ---------- FAVORITE TOGGLE ----------
+  // Requires a signed-in session (Authorization header) in a full build; here it
+  // toggles visually and calls the API, which will 401 until auth is wired in the UI.
+  async function toggleFav(btn, listingId){
+    const svg = btn.querySelector('svg');
+    const active = btn.classList.toggle('is-fav');
+    svg.setAttribute('fill', active ? '#B98A3D' : 'none');
+    svg.setAttribute('stroke', active ? '#B98A3D' : '#3A473E');
+    if(!listingId) return;
+    try { await api(`/listings/${listingId}/favorite`, { method: 'POST' }); }
+    catch (err) { /* not signed in yet — visual toggle still works */ }
+  }
+
+  // ---------- FILTER CHIPS ----------
+  document.querySelectorAll('[data-chip]').forEach(chip => {
+    chip.addEventListener('click', () => {
+      document.querySelectorAll('[data-chip]').forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      runSearch();
+    });
+  });
+  function updatePrice(v){
+    setText('priceOut', 'Rs 1,000 – ' + Number(v).toLocaleString());
+  }
+
+  // ---------- ROOM TYPE CHIP STYLE ----------
+  const style = document.createElement('style');
+  style.textContent = `.roomtype-chip{border-color:#DCD5C6;color:#3A473E;background:#fff;}
+    .roomtype-chip.active{background:#3E5C46;color:#fff;border-color:#3E5C46;}`;
+  document.head.appendChild(style);
+
+  // ---------- LIGHTBOX ----------
+  function openLightbox(i){
+    const imgs = (currentListing && currentListing.images && currentListing.images.length) ? currentListing.images : [FALLBACK_IMG];
+    setSrc('lightboxImg', resolveImg(imgs[Math.min(i, imgs.length-1)]));
+    const lb = document.getElementById('lightbox');
+    lb.classList.remove('hidden'); lb.classList.add('flex');
+  }
+  function closeLightbox(){
+    const lb = document.getElementById('lightbox');
+    lb.classList.add('hidden'); lb.classList.remove('flex');
+  }
+
+  // ---------- ROOM DETAIL PAGE ----------
+  async function loadDetail(id){
+    if(!id){
+      setText('dTitle', 'Pick a room from search or the homepage');
+      return;
+    }
+    try {
+      const { listing } = await api(`/listings/${id}`);
+      currentListing = listing;
+
+      setText('dTitle', listing.title);
+      setText('dRoomType', listing.roomType);
+      setText('dAddress', `${listing.address || ''}${listing.city ? ', ' + listing.city : ''}`);
+      setText('dRating', listing.rating || '—');
+      setText('dReviewCount', listing.reviewCount || 0);
+      setText('dMaxGuests', `${listing.maxGuests} guests`);
+      setText('dBedrooms', `${listing.bedrooms} bedroom${listing.bedrooms>1?'s':''}`);
+      setText('dBathrooms', `${listing.bathrooms} bathroom${listing.bathrooms>1?'s':''}`);
+      setText('dHostName', listing.host ? `Hosted by ${listing.host.firstName}` : 'Hosted by Haven');
+      setText('dDescription', listing.description || '');
+      setText('dNightlyRate', `Rs ${listing.pricePerNight.toLocaleString()}`);
+      setText('dRatingCard', listing.rating || '—');
+      setText('dMapLabel', `${listing.address || ''}${listing.city ? ', ' + listing.city : ''}`);
+
+      // Gallery
+      const imgs = (listing.images && listing.images.length) ? listing.images : [FALLBACK_IMG];
+      const slots = ['dImgMain','dImg1','dImg2','dImg3','dImg4'];
+      slots.forEach((id2, i) => {
+        const el = document.getElementById(id2);
+        if(!el) return;
+        el.src = resolveImg(imgs[i % imgs.length]);
+        el.onerror = () => { el.src = FALLBACK_IMG; };
+      });
+      setText('dMorePhotos', imgs.length > 5 ? `+${imgs.length - 5} photos` : 'View photos');
+
+      // Amenities
+      document.getElementById('dAmenities').innerHTML = (listing.amenities || []).map(a => `
+        <div class="flex items-center gap-3">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3E5C46" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="m9 12 2 2 4-4"/></svg>
+          ${a}
+        </div>`).join('') || '<p class="text-ink2 text-sm">No amenities listed.</p>';
+
+      // House rules
+      setHTML('dRules', (listing.houseRules || []).map(r => `<li>${r}</li>`).join('') || '<li>No specific house rules listed.</li>');
+
+      // Summary sidebar + confirmation prefill
+      setText('sumTitle', listing.title);
+      setText('sumRating', `★ ${listing.rating || '—'} (${listing.reviewCount || 0} reviews)`);
+      setSrc('sumImg', resolveImg(imgs[0]));
+      setText('confTitle', listing.title);
+      setText('confAddress', `${listing.address || ''}${listing.city ? ', ' + listing.city : ''}`);
+      setSrc('confImg', resolveImg(imgs[0]));
+
+      // Real map
+      if(listing.lat && listing.lng){
+        setHTML('dMap', '<div id="dMapEl" class="w-full h-full"></div>');
+        if(detailMap){ detailMap.remove(); detailMap = null; }
+        detailMap = L.map('dMapEl').setView([listing.lat, listing.lng], 14);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(detailMap);
+        L.marker([listing.lat, listing.lng]).addTo(detailMap);
+        setTimeout(() => detailMap.invalidateSize(), 200);
+      }
+      // else: keep the styled placeholder — this listing has no lat/lng saved yet.
+
+      await calcPrice();
+    } catch (err) {
+      setText('dTitle', 'Could not load this listing');
+      setText('dDescription', `${err.message}. Check that the API is running at ${API_BASE}.`);
+    }
+  }
+
+  // ---------- PRICE CALC ENGINE (via backend /bookings/quote) ----------
+  async function calcPrice(){
+    if(!currentListing) return;
+    const checkIn = document.getElementById('dCheckin').value;
+    const checkOut = document.getElementById('dCheckout').value;
+    const errEl = document.getElementById('quoteError');
+    errEl.classList.add('hidden');
+    try {
+      const q = await api('/bookings/quote', {
+        method: 'POST',
+        body: JSON.stringify({ listingId: currentListing.id, checkIn, checkOut }),
+      });
+      setText('nightsLabel', `Rs ${q.nightlyRate.toLocaleString()} × ${q.nights} night${q.nights>1?'s':''}`);
+      setText('nightsTotal', 'Rs ' + q.subtotal.toLocaleString());
+      setText('cleaningFeeOut', 'Rs ' + q.cleaningFee.toLocaleString());
+      setText('serviceFee', 'Rs ' + q.serviceFee.toLocaleString());
+      setText('grandTotal', 'Rs ' + q.total.toLocaleString());
+      if(!q.available){ errEl.textContent = 'These dates are already booked for this listing.'; errEl.classList.remove('hidden'); }
+      currentListing._quote = q;
+    } catch (err) {
+      errEl.textContent = err.message;
+      errEl.classList.remove('hidden');
+    }
+  }
+
+  function fillBookingSummary(){
+    if(!currentListing || !currentListing._quote) return;
+    const q = currentListing._quote;
+    setText('sumNightsLabel', `Rs ${q.nightlyRate.toLocaleString()} × ${q.nights} nights`);
+    setText('sumNightsTotal', 'Rs ' + q.subtotal.toLocaleString());
+    setText('sumCleaning', 'Rs ' + q.cleaningFee.toLocaleString());
+    setText('sumService', 'Rs ' + q.serviceFee.toLocaleString());
+    setText('sumTotal', 'Rs ' + q.total.toLocaleString());
+    setText('confirmPayTotal', 'Rs ' + q.total.toLocaleString());
+  }
+
+  // ---------- BOOKING STEPS ----------
+  function bookStep(n){
+    document.querySelectorAll('.book-step').forEach(s => s.classList.add('hidden'));
+    document.getElementById('bookStep' + n).classList.remove('hidden');
+    document.querySelectorAll('.step-item').forEach(item => {
+      const step = Number(item.dataset.step);
+      const dot = item.querySelector('.step-dot');
+      const label = item.querySelector('span');
+      if(step <= n){ dot.className = 'step-dot w-8 h-8 rounded-full bg-moss text-white flex items-center justify-center text-sm font-medium'; label.className = 'text-sm font-medium text-ink'; }
+      else { dot.className = 'step-dot w-8 h-8 rounded-full bg-paper2 border border-line text-ink2 flex items-center justify-center text-sm font-medium'; label.className = 'text-sm font-medium text-ink2'; }
+    });
+    window.scrollTo({top:0, behavior:'smooth'});
+  }
+
+  function submitGuestInfo(){
+    const errEl = document.getElementById('guestInfoError');
+    const first = document.getElementById('gFirstName').value.trim();
+    const last = document.getElementById('gLastName').value.trim();
+    const email = document.getElementById('gEmail').value.trim();
+    if(!first || !last || !email){
+      errEl.textContent = 'Please fill in first name, last name, and email.';
+      errEl.classList.remove('hidden');
+      return;
+    }
+    errEl.classList.add('hidden');
+    bookStep(2);
+  }
+
+  async function confirmBooking(){
+    const btn = document.getElementById('confirmPayBtn');
+    const errEl = document.getElementById('paymentError');
+    errEl.classList.add('hidden');
+    if(!currentListing){ errEl.textContent = 'No room selected.'; errEl.classList.remove('hidden'); return; }
+
+    const payload = {
+      listingId: currentListing.id,
+      checkIn: document.getElementById('dCheckin').value,
+      checkOut: document.getElementById('dCheckout').value,
+      guests: Number((document.getElementById('dGuests').value || '2').match(/\d+/)?.[0] || 2),
+      guestFirstName: document.getElementById('gFirstName').value.trim(),
+      guestLastName: document.getElementById('gLastName').value.trim(),
+      guestEmail: document.getElementById('gEmail').value.trim(),
+      guestPhone: document.getElementById('gPhone').value.trim() || undefined,
+      specialRequests: document.getElementById('gRequests').value.trim() || undefined,
+      paymentMethod: document.querySelector('input[name="pay"]:checked').value,
+    };
+
+    btn.disabled = true;
+    btn.textContent = 'Processing…';
+    try {
+      const { booking } = await api('/bookings', { method: 'POST', body: JSON.stringify(payload) });
+      setText('bookingId', booking.bookingRef);
+      setText('confDates', `${booking.checkIn} – ${booking.checkOut}`);
+      setText('confGuests', `${booking.guests} guests`);
+      setText('confTotal', 'Rs ' + booking.total.toLocaleString());
+      bookStep(3);
+    } catch (err) {
+      errEl.textContent = err.message;
+      errEl.classList.remove('hidden');
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = 'Confirm and pay <span id="confirmPayTotal">' + document.getElementById('grandTotal').textContent + '</span>';
+    }
+  }
+
+  // ---------- INIT ----------
+  loadDestinations();
+  loadPopular();
+</script>
+</body>
+</html>
